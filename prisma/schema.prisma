@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- MASTER DATA: ROLE & DIVISION ----------
+
+model Role {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+}
+
+model Division {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            User[]
+  ticketCategories TicketCategory[]
+  tickets          Ticket[]
+  faqArticles      FaqArticle[]
+}
+
+// ---------- AUTH & USER ----------
+
+model User {
+  id               String    @id @default(cuid())
+  name             String
+  email            String    @unique
+  passwordHash     String
+  roleId           String
+  role             Role      @relation(fields: [roleId], references: [id])
+  divisionId       String?
+  division         Division? @relation(fields: [divisionId], references: [id])
+  emailVerified    DateTime?
+  isActive         Boolean   @default(true)
+  refreshTokenHash String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  ticketsCreated  Ticket[]        @relation("TicketCreatedBy")
+  ticketsAssigned Ticket[]        @relation("TicketAssignedTo")
+  ticketComments  TicketComment[]
+  ticketHistories TicketHistory[]
+  notifications   Notification[]
+  faqArticles     FaqArticle[]
+
+  @@index([roleId])
+  @@index([divisionId])
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ---------- MASTER DATA KATEGORI ----------
+
+model TicketCategory {
+  id             String   @id @default(cuid())
+  name           String
+  divisionId     String
+  division       Division @relation(fields: [divisionId], references: [id])
+  slaHours       Int
+  defaultUrgency Urgency  @default(NORMAL)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tickets Ticket[]
+
+  @@index([divisionId])
+}
+
+// ---------- TICKETING ENGINE ----------
+
+enum Urgency {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+model Ticket {
+  id           String         @id @default(cuid())
+  ticketNumber String         @unique
+  title        String
+  description  String         @db.Text
+  urgency      Urgency        @default(NORMAL)
+  status       TicketStatus   @default(OPEN)
+  categoryId   String
+  category     TicketCategory @relation(fields: [categoryId], references: [id])
+  divisionId   String
+  division     Division       @relation(fields: [divisionId], references: [id])
+
+  createdById  String
+  createdBy    User    @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  assignedToId String?
+  assignedTo   User?   @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
+
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+  slaDeadline DateTime?
+  slaBreached Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments TicketAttachment[]
+  comments    TicketComment[]
+  histories   TicketHistory[]
+  rating      TicketRating?
+
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([divisionId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+model TicketAttachment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fileName   String
+  filePath   String
+  fileSize   Int
+  mimeType   String
+  uploadedAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  content    String   @db.Text
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+model TicketHistory {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  fromValue String?
+  toValue   String?
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+model TicketRating {
+  id        String   @id @default(cuid())
+  ticketId  String   @unique
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  score     Int
+  feedback  String?  @db.Text
+  createdAt DateTime @default(now())
+}
+
+// ---------- KNOWLEDGE BASE / FAQ ----------
+
+model FaqArticle {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    @db.Text
+  divisionId  String?
+  division    Division? @relation(fields: [divisionId], references: [id])
+  isPublished Boolean   @default(true)
+  viewCount   Int       @default(0)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([divisionId])
+}
+
+// ---------- NOTIFIKASI ----------
+
+model Notification {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  title           String
+  message         String
+  type            String
+  relatedTicketId String?
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+}

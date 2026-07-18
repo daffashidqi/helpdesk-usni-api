@@ -1,0 +1,921 @@
+{
+  "info": {
+    "_postman_id": "b3e2f1a0-6c8d-4e2a-9f3a-helpdesk-usni-api",
+    "name": "helpdesk-usni-api",
+    "description": "Koleksi Postman lengkap untuk backend Sistem Helpdesk Ticketing USNI (Bun + Hono + Prisma + PostgreSQL): Autentikasi, Master Data (Role/Division/Kategori), Manajemen User, Profil, Ticketing Engine, FAQ, Notifikasi, dan Dashboard.\n\n## Cara Pakai\n1. Import juga file environment `helpdesk-usni-api.postman_environment.json` dan pilih environment tersebut.\n2. Jalankan `Auth > Login (Admin)` dulu (pakai kredensial dari `prisma/seed.ts`, default admin@usni.ac.id / Admin12345) — script Tests otomatis menyimpan `accessToken` ke environment.\n3. Folder `Master Data` dan `User Management` butuh role ADMIN, jadi pastikan `accessToken` masih milik admin saat memanggilnya.\n4. Untuk testing alur tiket lengkap (assign, status, dsb), login ulang sebagai PELAPOR/agen IT-AKADEMIK-BUSP memakai request `Auth > Login`, accessToken di environment akan ter-overwrite.\n5. Beberapa request (create category, create ticket, dst) otomatis menyimpan id hasil create ke environment (categoryId, ticketId, roleId, divisionId) lewat script Tests.\n6. Refresh token dikirim sebagai httpOnly cookie oleh server — aktifkan cookie jar Postman (default aktif).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Budi Santoso\",\n  \"email\": \"budi.santoso@student.usni.ac.id\",\n  \"password\": \"Password123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "description": "Registrasi user baru (role default PELAPOR). Email harus domain @usni.ac.id / @student.usni.ac.id."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email?token={{verificationToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-email"],
+              "query": [{ "key": "token", "value": "{{verificationToken}}" }]
+            },
+            "description": "Isi variable verificationToken dari email/console log server (SMTP belum di-set = link dicetak ke console)."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Admin - seed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.environment.set('accessToken', body.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@usni.ac.id\",\n  \"password\": \"Admin12345\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "description": "Login sebagai admin default dari prisma/seed.ts. Ganti body untuk login sebagai user lain."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (generic)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.environment.set('accessToken', body.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"budi.santoso@student.usni.ac.id\",\n  \"password\": \"Password123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.environment.set('accessToken', pm.response.json().accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"budi.santoso@student.usni.ac.id\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["auth", "forgot-password"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"PasswordBaru123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["auth", "reset-password"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Master Data - Roles",
+      "item": [
+        {
+          "name": "List Roles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const roles = pm.response.json().roles;",
+                  "  const pelapor = roles.find(r => r.code === 'PELAPOR');",
+                  "  if (pelapor) pm.environment.set('pelaporRoleId', pelapor.id);",
+                  "  const it = roles.find(r => r.code === 'IT');",
+                  "  if (it) pm.environment.set('itRoleId', it.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/roles", "host": ["{{baseUrl}}"], "path": ["roles"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('roleId', pm.response.json().role.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"KEUANGAN\",\n  \"name\": \"Tim Keuangan\"\n}" },
+            "url": { "raw": "{{baseUrl}}/roles", "host": ["{{baseUrl}}"], "path": ["roles"] },
+            "description": "Khusus ADMIN. Role baru di luar 5 role bawaan hanya berperilaku seperti PELAPOR di ticketing engine (lihat README)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Tim Keuangan & Anggaran\"\n}" },
+            "url": { "raw": "{{baseUrl}}/roles/{{roleId}}", "host": ["{{baseUrl}}"], "path": ["roles", "{{roleId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/roles/{{roleId}}", "host": ["{{baseUrl}}"], "path": ["roles", "{{roleId}}"] },
+            "description": "Tolak (403) jika isSystem=true, tolak (409) jika masih dipakai user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Master Data - Divisions",
+      "item": [
+        {
+          "name": "List Divisions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const divisions = pm.response.json().divisions;",
+                  "  const it = divisions.find(d => d.code === 'IT');",
+                  "  if (it) pm.environment.set('itDivisionId', it.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/divisions", "host": ["{{baseUrl}}"], "path": ["divisions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Division",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('divisionId', pm.response.json().division.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"PERPUSTAKAAN\",\n  \"name\": \"Tim Perpustakaan\"\n}" },
+            "url": { "raw": "{{baseUrl}}/divisions", "host": ["{{baseUrl}}"], "path": ["divisions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Division",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Tim Perpustakaan Pusat\"\n}" },
+            "url": { "raw": "{{baseUrl}}/divisions/{{divisionId}}", "host": ["{{baseUrl}}"], "path": ["divisions", "{{divisionId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Division",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/divisions/{{divisionId}}", "host": ["{{baseUrl}}"], "path": ["divisions", "{{divisionId}}"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Management (ADMIN)",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "roleId", "value": "", "disabled": true },
+                { "key": "divisionId", "value": "", "disabled": true },
+                { "key": "isActive", "value": "true", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User (Agent IT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('createdUserId', pm.response.json().user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Agen IT Satu\",\n  \"email\": \"agen.it@usni.ac.id\",\n  \"roleId\": \"{{itRoleId}}\",\n  \"divisionId\": \"{{itDivisionId}}\",\n  \"password\": \"AgentPass123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] },
+            "description": "Jalankan Master Data - Roles > List Roles dan Master Data - Divisions > List Divisions dulu supaya itRoleId & itDivisionId terisi. Jika password dikosongkan, sistem generate token acak dan kirim email set-password."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Agen IT Satu (Updated)\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{createdUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{createdUserId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{createdUserId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{createdUserId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Users (CSV)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+            },
+            "url": { "raw": "{{baseUrl}}/users/bulk-upload", "host": ["{{baseUrl}}"], "path": ["users", "bulk-upload"] },
+            "description": "Pilih file CSV dengan header: name,email,roleCode. Untuk role IT/AKADEMIK/BUSP, divisionId otomatis diambil dari Division dengan code yang sama."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Nama Baru Saya\"\n}" },
+            "url": { "raw": "{{baseUrl}}/profile", "host": ["{{baseUrl}}"], "path": ["profile"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Password123\",\n  \"newPassword\": \"PasswordBaru123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/profile/password", "host": ["{{baseUrl}}"], "path": ["profile", "password"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List Categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const cats = pm.response.json().categories;",
+                  "  if (cats.length > 0) pm.environment.set('categoryId', cats[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/categories", "host": ["{{baseUrl}}"], "path": ["categories"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('categoryId', pm.response.json().category.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Printer Rusak\",\n  \"divisionId\": \"{{itDivisionId}}\",\n  \"slaHours\": 8\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/categories", "host": ["{{baseUrl}}"], "path": ["categories"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"slaHours\": 6\n}" },
+            "url": { "raw": "{{baseUrl}}/categories/{{categoryId}}", "host": ["{{baseUrl}}"], "path": ["categories", "{{categoryId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Category (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/categories/{{categoryId}}", "host": ["{{baseUrl}}"], "path": ["categories", "{{categoryId}}"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "Create Ticket",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('ticketId', pm.response.json().ticket.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Wifi lambat di lab 3", "type": "text" },
+                { "key": "description", "value": "Koneksi wifi sangat lambat sejak pagi ini di lab 3", "type": "text" },
+                { "key": "categoryId", "value": "{{categoryId}}", "type": "text" },
+                { "key": "urgency", "value": "HIGH", "type": "text" },
+                { "key": "attachments", "type": "file", "src": [] }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/tickets", "host": ["{{baseUrl}}"], "path": ["tickets"] },
+            "description": "Login sebagai PELAPOR (atau role lain) dulu. Field attachments opsional, bisa dikosongkan/dihapus."
+          },
+          "response": []
+        },
+        {
+          "name": "List Tickets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tickets?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["tickets"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "", "disabled": true },
+                { "key": "divisionId", "value": "", "disabled": true },
+                { "key": "categoryId", "value": "", "disabled": true },
+                { "key": "urgency", "value": "", "disabled": true },
+                { "key": "assignedToId", "value": "", "disabled": true },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Filter otomatis by role: PELAPOR hanya tiketnya sendiri, agen hanya tiket divisinya, ADMIN semua."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Ticket Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Ticket to Me",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/assign", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "assign"] },
+            "description": "Login sebagai agen IT/AKADEMIK/BUSP di divisi yang sama dengan tiket. Tiket harus berstatus OPEN."
+          },
+          "response": []
+        },
+        {
+          "name": "Reassign Division",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"newCategoryId\": \"{{categoryId}}\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/tickets/{{ticketId}}/reassign-division",
+              "host": ["{{baseUrl}}"],
+              "path": ["tickets", "{{ticketId}}", "reassign-division"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Status -> IN_PROGRESS/PENDING/RESOLVED",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"RESOLVED\"\n}" },
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/status", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "status"] },
+            "description": "Login sebagai agen pemilik divisi tiket. Lihat docs/API.md untuk state machine lengkap."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Status -> CLOSED (konfirmasi pelapor)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"CLOSED\"\n}" },
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/status", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "status"] },
+            "description": "Login sebagai pemilik tiket (pelapor). Tiket harus berstatus RESOLVED."
+          },
+          "response": []
+        },
+        {
+          "name": "Reopen Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/reopen", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "reopen"] },
+            "description": "Login sebagai pemilik tiket. Hanya bisa jika status CLOSED dan maksimal 3 hari setelah closedAt."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Sedang dicek ke lapangan\",\n  \"isInternal\": false\n}" },
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/comments", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "comments"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Rating",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"score\": 5,\n  \"feedback\": \"Cepat ditangani, terima kasih!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/rating", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "rating"] },
+            "description": "Login sebagai pemilik tiket. Tiket harus berstatus CLOSED dan belum pernah dirating."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "FAQ",
+      "item": [
+        {
+          "name": "List FAQ",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/faq?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "", "disabled": true },
+                { "key": "divisionId", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create FAQ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('faqId', pm.response.json().article.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Cara reset password akun Helpdesk\",\n  \"content\": \"Buka halaman lupa password, masukkan email kampus Anda, lalu ikuti tautan yang dikirim ke email.\",\n  \"divisionId\": null,\n  \"isPublished\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/faq", "host": ["{{baseUrl}}"], "path": ["faq"] },
+            "description": "Login sebagai ADMIN/IT/AKADEMIK/BUSP. divisionId null = artikel general."
+          },
+          "response": []
+        },
+        {
+          "name": "Get FAQ Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/faq/{{faqId}}", "host": ["{{baseUrl}}"], "path": ["faq", "{{faqId}}"] },
+            "description": "Increment viewCount tiap kali diakses."
+          },
+          "response": []
+        },
+        {
+          "name": "Update FAQ",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"isPublished\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/faq/{{faqId}}", "host": ["{{baseUrl}}"], "path": ["faq", "{{faqId}}"] },
+            "description": "Hanya author atau ADMIN."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete FAQ",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/faq/{{faqId}}", "host": ["{{baseUrl}}"], "path": ["faq", "{{faqId}}"] },
+            "description": "Hanya author atau ADMIN."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const items = pm.response.json().items;",
+                  "  if (items.length > 0) pm.environment.set('notificationId', items[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/notifications?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "isRead", "value": "false", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark One as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["notifications", "{{notificationId}}", "read"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/notifications/read-all", "host": ["{{baseUrl}}"], "path": ["notifications", "read-all"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "summary"],
+              "query": [{ "key": "divisionId", "value": "", "disabled": true }]
+            },
+            "description": "ADMIN & agen (IT/AKADEMIK/BUSP). Agen otomatis dibatasi ke divisinya sendiri."
+          },
+          "response": []
+        },
+        {
+          "name": "MTTR",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/mttr",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "mttr"],
+              "query": [
+                { "key": "divisionId", "value": "", "disabled": true },
+                { "key": "dateFrom", "value": "", "disabled": true },
+                { "key": "dateTo", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "SLA Breach Rate",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/sla-breach-rate",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "sla-breach-rate"],
+              "query": [
+                { "key": "divisionId", "value": "", "disabled": true },
+                { "key": "dateFrom", "value": "", "disabled": true },
+                { "key": "dateTo", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "CSAT",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/csat",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "csat"],
+              "query": [
+                { "key": "divisionId", "value": "", "disabled": true },
+                { "key": "dateFrom", "value": "", "disabled": true },
+                { "key": "dateTo", "value": "", "disabled": true }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [{ "key": "baseUrl", "value": "http://localhost:4000" }]
+}

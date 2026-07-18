@@ -1,0 +1,38 @@
+{
+  "name": "helpdesk-usni-api",
+  "version": "1.0.0",
+  "description": "Backend API Sistem Helpdesk Ticketing USNI (autentikasi, ticketing engine, FAQ, notifikasi, dashboard)",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "bun prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "bun prisma/seed.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "hono": "^4.6.13",
+    "hono-rate-limiter": "^0.4.2",
+    "jose": "^5.9.6",
+    "nodemailer": "^6.9.16",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/nodemailer": "^6.4.16",
+    "bun-types": "^1.1.38",
+    "prisma": "^5.22.0",
+    "typescript": "^5.6.3"
+  }
+}
