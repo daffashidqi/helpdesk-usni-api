@@ -152,9 +152,10 @@ export async function getCsat(user: AccessTokenPayload, params: { divisionId?: s
       _avg: { score: true },
       _count: { _all: true },
     }),
-    prisma.ticketRating.findFirst({
+    prisma.ticketRating.findMany({
       where,
       orderBy: { createdAt: "desc" },
+      take: 3,
       include: {
         ticket: {
           select: {
@@ -170,15 +171,13 @@ export async function getCsat(user: AccessTokenPayload, params: { divisionId?: s
   return {
     averageScore: aggregate._avg.score ? Number(aggregate._avg.score.toFixed(2)) : 0,
     totalRatings: aggregate._count._all,
-    latestRating: latest
-      ? {
-          score: latest.score,
-          feedback: latest.feedback,
-          createdAt: latest.createdAt,
-          ticketNumber: latest.ticket.ticketNumber,
-          ticketTitle: latest.ticket.title,
-          reporterName: latest.ticket.createdBy.name,
-        }
-      : null,
+    latestRatings: latest.map((rating) => ({
+      score: rating.score,
+      feedback: rating.feedback,
+      createdAt: rating.createdAt,
+      ticketNumber: rating.ticket.ticketNumber,
+      ticketTitle: rating.ticket.title,
+      reporterName: rating.ticket.createdBy.name,
+    })),
   };
 }

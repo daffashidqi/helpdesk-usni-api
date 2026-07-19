@@ -72,10 +72,25 @@ async function assertTicketAccess(user: AccessTokenPayload, ticket: { createdByI
   throw new AppError("Anda tidak memiliki akses ke tiket ini", 403);
 }
 
+const MAX_ACTIVE_TICKETS_PER_USER = 3;
+
 export async function createTicket(user: AccessTokenPayload, input: CreateTicketInput, files: File[]) {
   const category = await prisma.ticketCategory.findUnique({ where: { id: input.categoryId } });
   if (!category || !category.isActive) {
     throw new AppError("Kategori tidak ditemukan atau sudah tidak aktif", 404);
+  }
+
+  // Satu akun pelapor maksimal punya MAX_ACTIVE_TICKETS_PER_USER tiket aktif
+  // (belum CLOSED) dalam waktu bersamaan, supaya tidak menumpuk tiket tanpa
+  // ditindaklanjuti. Tiket yang sudah CLOSED tidak dihitung.
+  const activeCount = await prisma.ticket.count({
+    where: { createdById: user.userId, status: { not: "CLOSED" } },
+  });
+  if (activeCount >= MAX_ACTIVE_TICKETS_PER_USER) {
+    throw new AppError(
+      `Anda sudah memiliki ${MAX_ACTIVE_TICKETS_PER_USER} tiket aktif. Selesaikan atau tutup salah satu tiket terlebih dahulu sebelum membuat tiket baru.`,
+      400
+    );
   }
 
   const slaDeadline = new Date(Date.now() + category.slaHours * 60 * 60 * 1000);
@@ -270,16 +285,18 @@ export async function assignTicketToMe(user: AccessTokenPayload, ticketId: strin
   if (!hasDivisionAccess(user, ticket.divisionId)) {
     throw new AppError("Tiket ini bukan milik divisi Anda", 403);
   }
-  if (ticket.status !== "OPEN") {
+  if (ticket.status !== "OPEN" && ticket.status !== "REOPENED") {
     throw new AppError(`Tiket dengan status ${getTicketStatusLabel(ticket.status)} tidak bisa di-assign`, 400);
   }
+
+  const previousStatus = ticket.status;
 
   await prisma.$transaction(async (tx) => {
     await tx.ticket.update({
       where: { id: ticketId },
       data: { assignedToId: user.userId, status: "IN_PROGRESS" },
     });
-    await recordHistory(tx, ticketId, user.userId, "ASSIGNED", ticket.status, "IN_PROGRESS");
+    await recordHistory(tx, ticketId, user.userId, "ASSIGNED", previousStatus, "IN_PROGRESS");
   });
 
   await notificationService.send(
@@ -312,7 +329,7 @@ export async function adminAssignTicket(user: AccessTokenPayload, ticketId: stri
   }
 
   const previousAssigneeId = ticket.assignedToId;
-  const nextStatus = ticket.status === "OPEN" ? "IN_PROGRESS" : ticket.status;
+  const nextStatus = ticket.status === "OPEN" || ticket.status === "REOPENED" ? "IN_PROGRESS" : ticket.status;
 
   await prisma.$transaction(async (tx) => {
     await tx.ticket.update({
@@ -442,6 +459,10 @@ export async function updateTicketStatus(
     }
   }
 
+  if (targetStatus === "PENDING" && !input.reason?.trim()) {
+    throw new AppError("Alasan wajib diisi saat mengubah status tiket menjadi Tertunda", 400);
+  }
+
   const now = new Date();
   const data: Prisma.TicketUpdateInput = { status: targetStatus };
   if (targetStatus === "RESOLVED") {
@@ -455,6 +476,16 @@ export async function updateTicketStatus(
   await prisma.$transaction(async (tx) => {
     await tx.ticket.update({ where: { id: ticketId }, data });
     await recordHistory(tx, ticketId, user.userId, "STATUS_CHANGED", ticket.status, targetStatus);
+    if (targetStatus === "PENDING" && input.reason?.trim()) {
+      await tx.ticketComment.create({
+        data: {
+          ticketId,
+          userId: user.userId,
+          content: `Alasan status Tertunda: ${input.reason.trim()}`,
+          isInternal: false,
+        },
+      });
+    }
   });
 
   const notifyTargets = new Set<string>();
@@ -493,19 +524,24 @@ export async function reopenTicket(user: AccessTokenPayload, ticketId: string) {
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.ticket.update({ where: { id: ticketId }, data: { status: "REOPENED" } });
+    // assignedToId dilepas supaya tiket kembali muncul di Pool Divisi agen
+    // (bukan otomatis kembali ke agen yang sama) dan perlu di-assign ulang.
+    await tx.ticket.update({ where: { id: ticketId }, data: { status: "REOPENED", assignedToId: null } });
     await recordHistory(tx, ticketId, user.userId, "REOPENED", "CLOSED", "REOPENED");
   });
 
-  if (ticket.assignedToId) {
-    await notificationService.send(
-      ticket.assignedToId,
-      "Tiket Dibuka Kembali",
-      `Tiket ${ticket.ticketNumber} dibuka kembali oleh pelapor.`,
-      "STATUS_CHANGED",
-      ticket.id
-    );
-  }
+  const agents = await prisma.user.findMany({
+    where: { divisionId: ticket.divisionId, isActive: true, role: { code: { in: AGENT_ROLE_CODES } } },
+    select: { id: true },
+  });
+
+  await notificationService.sendToMany(
+    agents.map((a) => a.id),
+    "Tiket Dibuka Kembali",
+    `Tiket ${ticket.ticketNumber} dibuka kembali oleh pelapor dan masuk ke pool divisi Anda lagi.`,
+    "STATUS_CHANGED",
+    ticket.id
+  );
 
   return getTicketById(user, ticketId);
 }

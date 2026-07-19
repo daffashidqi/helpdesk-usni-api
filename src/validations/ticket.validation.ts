@@ -43,6 +43,9 @@ export const reassignDivisionSchema = z.object({
 
 export const updateStatusSchema = z.object({
   status: ticketStatusEnum,
+  // Wajib diisi kalau status target PENDING (divalidasi di service layer,
+  // bukan di sini, karena aturannya bergantung pada nilai status).
+  reason: z.string().trim().max(1000).optional(),
 });
 
 export const createCommentSchema = z.object({

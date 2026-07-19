@@ -204,17 +204,20 @@ model TicketRating {
 // ---------- KNOWLEDGE BASE / FAQ ----------
 
 model FaqArticle {
-  id          String    @id @default(cuid())
-  title       String
-  content     String    @db.Text
-  divisionId  String?
-  division    Division? @relation(fields: [divisionId], references: [id])
-  isPublished Boolean   @default(true)
-  viewCount   Int       @default(0)
-  authorId    String
-  author      User      @relation(fields: [authorId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  title          String
+  content        String    @db.Text
+  divisionId     String?
+  division       Division? @relation(fields: [divisionId], references: [id])
+  isPublished    Boolean   @default(true)
+  // Tampil di homepage publik (sebelum login). Dibatasi maksimal 5 artikel
+  // aktif sekaligus — dijaga di service layer (createFaq/updateFaq).
+  showOnHomepage Boolean   @default(false)
+  viewCount      Int       @default(0)
+  authorId       String
+  author         User      @relation(fields: [authorId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([divisionId])
 }
