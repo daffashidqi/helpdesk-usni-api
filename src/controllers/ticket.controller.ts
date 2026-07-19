@@ -15,6 +15,7 @@ import {
   adminUpdateTicket,
   assignTicketToMe,
   createTicket,
+  deleteComment,
   deleteTicket,
   getTicketById,
   listTickets,
@@ -189,6 +190,18 @@ export async function createCommentController(c: Context) {
   try {
     const comment = await addComment(user, id, parsed.data);
     return c.json({ comment }, 201);
+  } catch (err) {
+    return handleError(c, err);
+  }
+}
+
+export async function deleteCommentController(c: Context) {
+  const user = c.get("user");
+  const id = c.req.param("id")!;
+  const commentId = c.req.param("commentId")!;
+  try {
+    await deleteComment(user, id, commentId);
+    return c.json({ message: "Komentar berhasil dihapus" }, 200);
   } catch (err) {
     return handleError(c, err);
   }

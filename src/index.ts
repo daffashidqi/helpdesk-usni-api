@@ -12,6 +12,7 @@ import { faqRoute } from "./routes/faq.route";
 import { notificationRoute } from "./routes/notification.route";
 import { dashboardRoute } from "./routes/dashboard.route";
 import { ratingRoute } from "./routes/rating.route";
+import { settingsRoute } from "./routes/settings.route";
 
 const app = new Hono();
 
@@ -50,6 +51,7 @@ app.route("/faq", faqRoute);
 app.route("/notifications", notificationRoute);
 app.route("/dashboard", dashboardRoute);
 app.route("/ratings", ratingRoute);
+app.route("/settings", settingsRoute);
 
 app.notFound((c) => c.json({ message: "Endpoint tidak ditemukan" }, 404));
 

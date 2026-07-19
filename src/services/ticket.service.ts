@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { AppError } from "../lib/errors";
 import { generateTicketNumber } from "../lib/ticketNumber";
 import { hasDivisionAccess } from "../middlewares/auth.middleware";
+import { getTicketStatusLabel } from "../lib/ticketStatusLabel";
 import { saveTicketAttachment } from "./upload.service";
 import * as notificationService from "./notification.service";
 import type { AccessTokenPayload } from "../lib/jwt";
@@ -165,7 +166,7 @@ export async function listTickets(user: AccessTokenPayload, query: ListTicketsQu
   ]);
 
   return {
-    items,
+    items: items.map((ticket) => ({ ...ticket, statusLabel: getTicketStatusLabel(ticket.status) })),
     pagination: {
       page: query.page,
       limit: query.limit,
@@ -190,7 +191,7 @@ export async function getTicketById(user: AccessTokenPayload, ticketId: string) 
     ticket.comments = ticket.comments.filter((c) => !c.isInternal);
   }
 
-  return ticket;
+  return { ...ticket, statusLabel: getTicketStatusLabel(ticket.status) };
 }
 
 export async function adminUpdateTicket(
@@ -215,6 +216,9 @@ export async function adminUpdateTicket(
     }
   }
 
+  const statusChanged = !!input.status && input.status !== ticket.status;
+  const now = new Date();
+
   await prisma.$transaction(async (tx) => {
     await tx.ticket.update({
       where: { id: ticketId },
@@ -223,9 +227,19 @@ export async function adminUpdateTicket(
         description: input.description,
         urgency: input.urgency,
         ...(category ? { categoryId: category.id, divisionId: category.divisionId } : {}),
+        ...(statusChanged
+          ? {
+              status: input.status,
+              ...(input.status === "RESOLVED" ? { resolvedAt: now } : {}),
+              ...(input.status === "CLOSED" ? { closedAt: now } : {}),
+            }
+          : {}),
       },
     });
     await recordHistory(tx, ticketId, user.userId, "EDITED_BY_ADMIN", null, null);
+    if (statusChanged) {
+      await recordHistory(tx, ticketId, user.userId, "STATUS_CHANGED_BY_ADMIN", ticket.status, input.status!);
+    }
   });
 
   return getTicketById(user, ticketId);
@@ -257,7 +271,7 @@ export async function assignTicketToMe(user: AccessTokenPayload, ticketId: strin
     throw new AppError("Tiket ini bukan milik divisi Anda", 403);
   }
   if (ticket.status !== "OPEN") {
-    throw new AppError(`Tiket dengan status ${ticket.status} tidak bisa di-assign`, 400);
+    throw new AppError(`Tiket dengan status ${getTicketStatusLabel(ticket.status)} tidak bisa di-assign`, 400);
   }
 
   await prisma.$transaction(async (tx) => {
@@ -407,7 +421,10 @@ export async function updateTicketStatus(
       throw new AppError("Hanya pembuat tiket yang bisa konfirmasi CLOSED", 403);
     }
     if (ticket.status !== "RESOLVED") {
-      throw new AppError(`Tiket harus berstatus RESOLVED sebelum bisa di-CLOSED (saat ini ${ticket.status})`, 400);
+      throw new AppError(
+        `Tiket harus berstatus Sudah Selesai sebelum bisa ditutup (saat ini ${getTicketStatusLabel(ticket.status)})`,
+        400
+      );
     }
   } else {
     if (!isAgent(user)) {
@@ -418,7 +435,10 @@ export async function updateTicketStatus(
     }
     const allowedTargets = AGENT_DRIVEN_TRANSITIONS[ticket.status] ?? [];
     if (!allowedTargets.includes(targetStatus)) {
-      throw new AppError(`Tidak bisa mengubah status dari ${ticket.status} ke ${targetStatus}`, 400);
+      throw new AppError(
+        `Tidak bisa mengubah status dari ${getTicketStatusLabel(ticket.status)} ke ${getTicketStatusLabel(targetStatus)}`,
+        400
+      );
     }
   }
 
@@ -444,7 +464,7 @@ export async function updateTicketStatus(
   await notificationService.sendToMany(
     Array.from(notifyTargets),
     "Status Tiket Diperbarui",
-    `Tiket ${ticket.ticketNumber} berubah status dari ${ticket.status} menjadi ${targetStatus}.`,
+    `Tiket ${ticket.ticketNumber} berubah status dari ${getTicketStatusLabel(ticket.status)} menjadi ${getTicketStatusLabel(targetStatus)}.`,
     "STATUS_CHANGED",
     ticket.id
   );
@@ -532,6 +552,22 @@ export async function addComment(user: AccessTokenPayload, ticketId: string, inp
   );
 
   return comment;
+}
+
+export async function deleteComment(user: AccessTokenPayload, ticketId: string, commentId: string) {
+  if (user.role !== "ADMIN") {
+    throw new AppError("Hanya ADMIN yang bisa menghapus komentar", 403);
+  }
+
+  const comment = await prisma.ticketComment.findUnique({ where: { id: commentId } });
+  if (!comment || comment.ticketId !== ticketId) {
+    throw new AppError("Komentar tidak ditemukan", 404);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.ticketComment.delete({ where: { id: commentId } });
+    await recordHistory(tx, ticketId, user.userId, "COMMENT_DELETED_BY_ADMIN", comment.content.slice(0, 200), null);
+  });
 }
 
 export async function addRating(user: AccessTokenPayload, ticketId: string, input: CreateRatingInput) {

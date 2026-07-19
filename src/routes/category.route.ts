@@ -14,6 +14,8 @@ categoryRoute.use("*", authMiddleware);
 // Bisa diakses semua role yang login (dropdown saat buat tiket)
 categoryRoute.get("/", listCategoriesController);
 
-categoryRoute.post("/", roleGuard("ADMIN"), createCategoryController);
-categoryRoute.patch("/:id", roleGuard("ADMIN"), updateCategoryController);
-categoryRoute.delete("/:id", roleGuard("ADMIN"), deleteCategoryController);
+// ADMIN bisa kelola kategori semua divisi; agen (IT/AKADEMIK/BUSP) hanya
+// divisi mereka sendiri (divalidasi di service layer).
+categoryRoute.post("/", roleGuard("ADMIN", "IT", "AKADEMIK", "BUSP"), createCategoryController);
+categoryRoute.patch("/:id", roleGuard("ADMIN", "IT", "AKADEMIK", "BUSP"), updateCategoryController);
+categoryRoute.delete("/:id", roleGuard("ADMIN", "IT", "AKADEMIK", "BUSP"), deleteCategoryController);

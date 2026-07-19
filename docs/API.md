@@ -24,6 +24,7 @@ Semua endpoint **kecuali** `POST /auth/register`, `POST /auth/login`, `GET /auth
 7. [Knowledge Base / FAQ](#7-knowledge-base--faq)
 8. [Notifikasi](#8-notifikasi)
 9. [Dashboard & Analytics](#9-dashboard--analytics)
+10. [Pengaturan Sistem (Logo & Favicon)](#10-pengaturan-sistem-branding-logo--favicon)
 
 ---
 
@@ -147,7 +148,10 @@ Inti aplikasi. Semua endpoint butuh login; filter akses otomatis berdasarkan rol
 | PATCH | `/tickets/:id/status` | Lihat state machine | Update status |
 | PATCH | `/tickets/:id/reopen` | Pemilik tiket | Buka kembali tiket CLOSED |
 | POST | `/tickets/:id/comments` | Sesuai akses tiket | Tambah komentar |
+| DELETE | `/tickets/:id/comments/:commentId` | `ADMIN` | Hapus komentar (satu-satunya role yang boleh) |
 | POST | `/tickets/:id/rating` | Pemilik tiket | Rating (hanya saat CLOSED) |
+
+> Setiap object tiket di response (`GET /tickets`, `GET /tickets/:id`, dst) menyertakan field **`statusLabel`** — label Bahasa Indonesia untuk `status`, lihat tabel di bagian [Update Status](#update-status--state-machine). Field `status` (kode enum) tetap dikirim apa adanya untuk kebutuhan logic frontend (state machine, filter), `statusLabel` khusus untuk ditampilkan ke user.
 
 ### Create Ticket
 
@@ -194,11 +198,22 @@ CLOSED --(reopen, endpoint terpisah)--> REOPENED
 REOPENED <--> IN_PROGRESS/PENDING/RESOLVED   [agen, sama seperti alur normal]
 ```
 
-- Transisi ke `PENDING`/`IN_PROGRESS`/`RESOLVED`: wajib role agen (`IT`/`AKADEMIK`/`BUSP`) **dan** `ticket.divisionId === user.divisionId`. Error `403`/`400` jika melanggar state machine (`Tidak bisa mengubah status dari X ke Y`).
+- Transisi ke `PENDING`/`IN_PROGRESS`/`RESOLVED`: wajib role agen (`IT`/`AKADEMIK`/`BUSP`) **dan** `ticket.divisionId === user.divisionId`. Error `403`/`400` jika melanggar state machine (pesan error dan `statusLabel` sudah dalam Bahasa Indonesia).
 - Transisi ke `CLOSED`: **hanya** `ticket.createdById === user.userId`, dan status sebelumnya harus `RESOLVED`.
 - Saat → `RESOLVED`: `resolvedAt = now()`, `slaBreached = resolvedAt > slaDeadline`.
 - Saat → `CLOSED`: `closedAt = now()`.
 - Setiap transisi tercatat di `TicketHistory` (`action: "STATUS_CHANGED"`) dan memicu notifikasi ke pelapor & agen terkait.
+
+**Label status (field `statusLabel`, `src/lib/ticketStatusLabel.ts`)** — kode enum (`status`) tidak berubah, hanya label tampilannya:
+
+| Kode (`status`) | Label (`statusLabel`) |
+|---|---|
+| `OPEN` | Belum Ditangani |
+| `IN_PROGRESS` | Sedang Diproses |
+| `PENDING` | Tertunda |
+| `RESOLVED` | Sudah Selesai |
+| `CLOSED` | Ditutup |
+| `REOPENED` | Dibuka Kembali |
 
 ### Reopen
 
@@ -207,6 +222,8 @@ Hanya pemilik tiket (`createdById`), hanya jika status `CLOSED`, dan **maksimal 
 ### Comment
 
 `{ content, isInternal? }`. `isInternal=true` hanya efektif untuk role `ADMIN`/`IT`/`AKADEMIK`/`BUSP` (dipaksa `false` untuk role lain). Komentar internal tidak memicu notifikasi ke pelapor dan tidak muncul di response detail tiket untuk role `PELAPOR`.
+
+**Hapus komentar** — `DELETE /tickets/:id/comments/:commentId`, **khusus role `ADMIN`** (role lain mendapat `403`, termasuk penulis komentar itu sendiri). Komentar dihapus permanen; jejaknya tetap tercatat di `TicketHistory` (`action: "COMMENT_DELETED_BY_ADMIN"`) untuk audit trail. Error `404` jika komentar tidak ditemukan atau bukan milik tiket tsb.
 
 ### Rating
 
@@ -252,6 +269,20 @@ Khusus role `ADMIN` dan agen (`IT`/`AKADEMIK`/`BUSP`). Query umum: `divisionId` 
 | GET | `/dashboard/csat` | `averageScore`, `totalRatings` (dari `TicketRating`) |
 
 Semua query pakai `Prisma.groupBy`/`aggregate` langsung di database (bukan fetch-then-compute) untuk efisiensi.
+
+---
+
+## 10. Pengaturan Sistem (Branding: Logo & Favicon)
+
+| Method | Endpoint | Auth | Keterangan |
+|---|---|---|---|
+| GET | `/settings` | ❌ Publik | `{ logoPath, faviconPath }` — dipakai halaman login sebelum user login |
+| POST | `/settings/logo` | `ADMIN` | `multipart/form-data`, field `logo` |
+| DELETE | `/settings/logo` | `ADMIN` | Reset ke logo/favicon default |
+
+**Satu upload memperbarui logo dan favicon sekaligus** — mengunggah `POST /settings/logo` mengisi `logoPath` **dan** `faviconPath` dengan file yang sama, jadi Admin tidak perlu upload dua kali. `DELETE /settings/logo` mengosongkan keduanya. File lama otomatis dihapus dari disk saat diganti.
+
+Tipe file yang diterima: PNG, JPG, SVG, WEBP, maksimal 2MB. Path yang dikembalikan relatif terhadap `UPLOAD_DIR` — akses filenya lewat `GET /uploads/<logoPath>` (lihat static file serving di `src/index.ts`). Frontend memakai `logoPath` untuk elemen logo di halaman, dan `faviconPath` untuk `<link rel="icon">` di `<head>`.
 
 ---
 

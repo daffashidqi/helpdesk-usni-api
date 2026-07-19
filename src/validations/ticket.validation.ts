@@ -34,6 +34,7 @@ export const adminUpdateTicketSchema = z.object({
   description: z.string().trim().min(10).optional(),
   categoryId: z.string().min(1).optional(),
   urgency: urgencyEnum.optional(),
+  status: ticketStatusEnum.optional(),
 });
 
 export const reassignDivisionSchema = z.object({

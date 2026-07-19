@@ -14,6 +14,7 @@ export async function listCategoriesController(c: Context) {
 }
 
 export async function createCategoryController(c: Context) {
+  const user = c.get("user");
   const body = await c.req.json().catch(() => null);
   const parsed = createCategorySchema.safeParse(body);
   if (!parsed.success) {
@@ -21,7 +22,7 @@ export async function createCategoryController(c: Context) {
   }
 
   try {
-    const category = await createCategory(parsed.data);
+    const category = await createCategory(user, parsed.data);
     return c.json({ category }, 201);
   } catch (err) {
     return handleError(c, err);
@@ -29,6 +30,7 @@ export async function createCategoryController(c: Context) {
 }
 
 export async function updateCategoryController(c: Context) {
+  const user = c.get("user");
   const id = c.req.param("id")!;
   const body = await c.req.json().catch(() => null);
   const parsed = updateCategorySchema.safeParse(body);
@@ -37,7 +39,7 @@ export async function updateCategoryController(c: Context) {
   }
 
   try {
-    const category = await updateCategory(id, parsed.data);
+    const category = await updateCategory(user, id, parsed.data);
     return c.json({ category }, 200);
   } catch (err) {
     return handleError(c, err);
@@ -45,9 +47,10 @@ export async function updateCategoryController(c: Context) {
 }
 
 export async function deleteCategoryController(c: Context) {
+  const user = c.get("user");
   const id = c.req.param("id")!;
   try {
-    await deleteCategory(id);
+    await deleteCategory(user, id);
     return c.json({ message: "Kategori berhasil dinonaktifkan" }, 200);
   } catch (err) {
     return handleError(c, err);

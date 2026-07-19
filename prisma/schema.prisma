@@ -234,3 +234,13 @@ model Notification {
 
   @@index([userId])
 }
+
+// ---------- PENGATURAN SISTEM ----------
+
+// Baris tunggal (id selalu "singleton") untuk pengaturan global seperti logo & favicon.
+model SystemSetting {
+  id          String   @id @default("singleton")
+  logoPath    String?
+  faviconPath String?
+  updatedAt   DateTime @updatedAt
+}

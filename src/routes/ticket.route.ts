@@ -6,6 +6,7 @@ import {
   createCommentController,
   createRatingController,
   createTicketController,
+  deleteCommentController,
   deleteTicketController,
   getTicketController,
   listTicketsController,
@@ -38,4 +39,5 @@ ticketRoute.patch("/:id/status", updateStatusController);
 ticketRoute.patch("/:id/reopen", reopenTicketController);
 
 ticketRoute.post("/:id/comments", createCommentController);
+ticketRoute.delete("/:id/comments/:commentId", roleGuard("ADMIN"), deleteCommentController);
 ticketRoute.post("/:id/rating", createRatingController);

@@ -655,6 +655,19 @@
         },
         {
           "name": "Add Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('commentId', pm.response.json().comment.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -663,6 +676,20 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"content\": \"Sedang dicek ke lapangan\",\n  \"isInternal\": false\n}" },
             "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/comments", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "comments"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Comment (ADMIN only)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/tickets/{{ticketId}}/comments/{{commentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["tickets", "{{ticketId}}", "comments", "{{commentId}}"]
+            },
+            "description": "Login sebagai ADMIN. Role lain (termasuk penulis komentar) mendapat 403. Komentar dihapus permanen, tercatat di TicketHistory."
           },
           "response": []
         },
@@ -898,6 +925,44 @@
                 { "key": "dateTo", "value": "", "disabled": true }
               ]
             }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Settings (Logo & Favicon)",
+      "item": [
+        {
+          "name": "Get Settings",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/settings", "host": ["{{baseUrl}}"], "path": ["settings"] },
+            "description": "Publik, tanpa auth. Dipakai halaman login untuk menampilkan logo sebelum user login."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Logo (also updates favicon)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "logo", "type": "file", "src": [] }]
+            },
+            "url": { "raw": "{{baseUrl}}/settings/logo", "host": ["{{baseUrl}}"], "path": ["settings", "logo"] },
+            "description": "Login sebagai ADMIN. Satu file yang diupload dipakai untuk logoPath DAN faviconPath sekaligus. Tipe: PNG/JPG/SVG/WEBP, maks 2MB."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Logo & Favicon",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/settings/logo", "host": ["{{baseUrl}}"], "path": ["settings", "logo"] },
+            "description": "Login sebagai ADMIN. Mengosongkan logoPath dan faviconPath, hapus file dari disk."
           },
           "response": []
         }
